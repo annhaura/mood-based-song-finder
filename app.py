@@ -36,9 +36,9 @@ with st.spinner("📥 Loading dataset..."):
         f"Genre: {row['playlist_genre']} ({row['playlist_subgenre']}). "
         f"Valence: {row['valence']:.2f}, Energy: {row['energy']:.2f}, Danceability: {row['danceability']:.2f}.", axis=1)
 
-# --- Genre Detection ---
 ALL_GENRES = sorted(set(df["playlist_genre"].dropna().unique()))
 
+# --- Functions ---
 def detect_requested_genre(user_input: str, all_genres: list[str]) -> str:
     lowered = user_input.lower()
     for genre in all_genres:
@@ -46,7 +46,6 @@ def detect_requested_genre(user_input: str, all_genres: list[str]) -> str:
             return genre
     return ""
 
-# --- Tool Functions ---
 def detect_language(text: str) -> str:
     try:
         return detect(text)
@@ -95,7 +94,27 @@ def is_followup_input(user_input: str) -> bool:
     except:
         return False
 
-# --- Chat Memory ---
+def recommend_song_by_genre_via_llm(mood: str, genre: str, lang: str) -> str:
+    prompt = (
+        f"Beri 1–2 rekomendasi lagu yang cocok untuk mood '{mood}' dan genre '{genre}'. Tampilkan nama lagu dan artis, lalu berikan penjelasan singkat."
+        if lang == "id" else
+        f"Recommend 1–2 songs that fit the mood '{mood}' in the '{genre}' genre. Include title, artist, and a short explanation."
+    )
+    try:
+        return llm.invoke(prompt).content.strip()
+    except:
+        return "❗ Gagal mendapatkan lagu dari LLM fallback."
+
+def retrieve_songs_from_dataset(query: str, genre: str = "", k=2) -> list[Document]:
+    filtered_df = df
+    if genre:
+        filtered_df = df[df["playlist_genre"].str.contains(genre, case=False, na=False)]
+    docs = [Document(page_content=row["combined_text"], metadata={"index": i}) for i, row in filtered_df.iterrows()]
+    vectorstore = FAISS.from_documents(docs, GoogleGenerativeAIEmbeddings(model="models/embedding-001"))
+    results = vectorstore.similarity_search(query, k=10)
+    return [r for r in results if r.page_content not in st.session_state.seen_songs][:k]
+
+# --- Session States ---
 for key in ["chat_history", "seen_songs", "last_lang", "last_input", "last_mood", "last_genre"]:
     if key not in st.session_state:
         st.session_state[key] = [] if key == "chat_history" else set() if key == "seen_songs" else ""
@@ -120,38 +139,18 @@ if user_input:
             st.session_state.last_genre = genre
 
         requested_genre = detect_requested_genre(user_input, ALL_GENRES)
-        df_filtered = df[df["playlist_genre"].str.contains(requested_genre, case=False, na=False)] if requested_genre else df
-
-        documents = [Document(page_content=row["combined_text"], metadata={"index": i}) for i, row in df_filtered.iterrows()]
-
-        embedding_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-        vectorstore = FAISS.from_documents(documents, embedding_model)
-
-        semantic_input = f"User said: '{user_input}'. Mood: {mood}. Genre: {genre}."
+        query_context = f"User said: '{user_input}'. Mood: {mood}. Genre: {genre}."
         if requested_genre:
-            semantic_input += f" User explicitly requested: {requested_genre}."
+            query_context += f" Explicitly requested: {requested_genre}."
 
-        results = vectorstore.similarity_search(semantic_input, k=10)
+        results = retrieve_songs_from_dataset(query_context, genre=requested_genre, k=2)
 
-        if requested_genre:
-            filtered = [
-                doc for doc in results
-                if requested_genre.lower() in doc.page_content.lower()
-                and doc.page_content not in st.session_state.seen_songs
-            ][:2]
-        else:
-            filtered = [doc for doc in results if doc.page_content not in st.session_state.seen_songs][:2]
-
-        if not filtered:
-            result = (
-                "😕 Belum nemu lagu yang pas. Mau coba mood atau genre lain?"
-                if lang == "id"
-                else "Hmm, I can't find more songs right now. Want to try another mood or genre?"
-            )
+        if not results:
+            result = recommend_song_by_genre_via_llm(mood, requested_genre or genre, lang)
         else:
             intro = generate_intro(user_input, mood, lang)
             response_lines = [intro, ""]
-            for song in filtered:
+            for song in results:
                 st.session_state.seen_songs.add(song.page_content)
                 reason = explain_recommendation(song.page_content, mood, lang, user_input)
                 response_lines.append(f"🎵 {song.page_content} 👉 {reason}")
@@ -167,5 +166,4 @@ for speaker, text in st.session_state.chat_history:
         st.markdown(text)
 
 # --- Limit History Length ---
-MAX_HISTORY = 10
-st.session_state.chat_history = st.session_state.chat_history[-MAX_HISTORY:]
+st.session_state.chat_history = st.session_state.chat_history[-10:]
