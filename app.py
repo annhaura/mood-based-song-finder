@@ -85,11 +85,16 @@ def generate_intro(user_input: str, mood: str, lang: str) -> str:
         return ""
 
 def is_followup_input(user_input: str) -> bool:
+    last_input = st.session_state.last_input
     prompt = (
-        "Is this message a follow-up in a conversation about music recommendation?\n"
-        "If it's continuing a previous mood or vibe, or asking for more music in a similar context, reply only 'yes'.\n"
-        "If it's a new topic or a different mood, reply only 'no'.\n\n"
-        f"Message: {user_input}"
+        "You are analyzing a conversation about music recommendations.\n"
+        "Here is the previous user message: "
+        f"'{last_input}'\n"
+        "Here is the current user message: "
+        f"'{user_input}'\n\n"
+        "Determine if the current message is a follow-up to the previous one — for example, asking for more songs, similar mood, or changing genre based on the same emotional context.\n"
+        "Respond with 'yes' if it’s a continuation, or 'no' if it starts a new mood/topic.\n"
+        "Answer with only 'yes' or 'no'."
     )
     try:
         result = llm.invoke(prompt).content.strip().lower()
