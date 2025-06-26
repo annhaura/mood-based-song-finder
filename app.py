@@ -70,21 +70,20 @@ def explain_recommendation(song_title: str, mood: str, lang: str, user_input: st
             prompt = f"Singkat saja ya. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}', berdasarkan pernyataan: '{user_input}', dalam gaya bicara santai dan empatik."
         else:
             prompt = f"Briefly explain in 1–2 sentences in a warm and friendly tone why the song '{song_title}' fits the mood '{mood}', based on what the user said: '{user_input}'."
-        
+
         response = llm.invoke(prompt).content.strip()
-        if not response or "Gagal" in response.lower():
-            # fallback
-            return f"Lagu ini cocok karena energinya sesuai mood '{mood}' dan bisa jadi teman yang pas buat kamu."
+        if not response or "gagal" in response.lower():
+            return f"This song fits the '{mood}' mood well and can be a comforting companion right now."
         return response
     except:
-        return f"Lagu ini cocok karena energinya sesuai mood '{mood}' dan bisa jadi teman yang pas buat kamu."
+        return f"This song fits the '{mood}' mood well and can be a comforting companion right now."
 
 def generate_intro(user_input: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Respons singkat dan empatik untuk seseorang yang bilang: '{user_input}' (mood: '{mood}'). Hindari basa-basi berlebihan. 2–3 kalimat cukup."
+            prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman curhat."
         else:
-            prompt = f"Write a short, warm, and natural response to someone who says: '{user_input}' (mood: '{mood}'). Avoid excessive intro or dramatic tone. 2–3 short sentences only."
+            prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
         return llm.invoke(prompt).content.strip()
     except:
         return ""
