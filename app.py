@@ -10,8 +10,8 @@ from langchain.docstore.document import Document
 from langdetect import detect
 
 # --- Streamlit Setup ---
-st.set_page_config(page_title="🎵 Mood Song Finder", page_icon="🎶")
-st.title("🎶 Mood Song Finder")
+st.set_page_config(page_title="Mood-Based Song Finder", page_icon="🎶")
+st.title("🎶 Mood-Based Song Finder")
 st.markdown("Find songs that match your mood. Powered by LangChain + Gemini LLM.")
 
 # --- API Key Input / Secret ---
@@ -69,9 +69,9 @@ def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
 def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Jelaskan dengan 2-3 kalimat kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}', jangan terlalu santai dan jangan pakai kata gue/lo."
+            prompt = f"Jelaskan kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}' dalam gaya bicara santai dan empatik. Singkat saja, maksimal 2 kalimat."
         else:
-            prompt = f"In 2-3 sentences, explain in a warm but concise tone why the song '{song_title}' fits the mood '{mood}', avoiding repetition of previous explanation."
+            prompt = f"Explain in a warm, friendly way why the song '{song_title}' fits the mood '{mood}' in no more than 2 sentences."
         return llm.invoke(prompt).content.strip()
     except:
         return "❗ Gagal mengambil penjelasan."
@@ -91,34 +91,33 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "seen_songs" not in st.session_state:
     st.session_state.seen_songs = set()
-if "last_input" not in st.session_state:
-    st.session_state.last_input = ""
 
 # --- Chat Input ---
-user_input = st.chat_input("What kind of music do you want to hear today?")
-if user_input:
+user_input_display = st.chat_input("What kind of music do you want to hear today?")
+if user_input_display:
     with st.spinner("🤖 Thinking..."):
-        lang = detect_language(user_input)
+        lang = detect_language(user_input_display)
 
-        is_followup = any(keyword in user_input.lower() for keyword in ["lagi", "others", "recs", "more", "ganti", "yang lain"])
+        is_followup = any(keyword in user_input_display.lower() for keyword in ["lagi dong", "lagi ya", "other", "recs", "ada lagi", "more", "ganti"])
 
         if not is_followup:
-            mood = classify_mood(user_input)
-            genre = infer_genre(user_input)
+            mood = classify_mood(user_input_display)
+            genre = infer_genre(user_input_display)
             st.session_state.last_mood = mood
             st.session_state.last_genre = genre
-            st.session_state.last_input = user_input
+            st.session_state.last_input = user_input_display
+            user_input_context = user_input_display
         else:
             mood = st.session_state.get("last_mood", "neutral")
             genre = st.session_state.get("last_genre", "pop")
-            user_input = st.session_state.last_input  # do not overwrite!
+            user_input_context = st.session_state.get("last_input", user_input_display)
 
-        songs = retrieve_similar_songs(f"{user_input}, genre: {genre}", k=2, exclude=st.session_state.seen_songs)
+        songs = retrieve_similar_songs(f"{user_input_context}, genre: {genre}", k=2, exclude=st.session_state.seen_songs)
 
         if not songs:
             response = "😕 Belum nemu lagu lain yang pas. Mau coba mood atau genre lain?" if lang == "id" else "Hmm, I can't find more songs right now. Want to try another mood or genre?"
         else:
-            intro = generate_intro(user_input, mood, lang) if not is_followup else ("Oke! Ini ada lagi lagu yang mungkin cocok." if lang == "id" else "Sure! Here are a few more you might like.")
+            intro = generate_intro(user_input_context, mood, lang) if not is_followup else ("Oke! Nih ada lagi lagu yang mungkin kamu suka." if lang == "id" else "Sure! Here are a few more you might like.")
             response_lines = [intro, ""]
             for song in songs:
                 st.session_state.seen_songs.add(song.page_content)
@@ -127,7 +126,7 @@ if user_input:
                 response_lines.append(line)
             response = "\n\n".join(response_lines)
 
-        st.session_state.chat_history.append(("You", user_input))
+        st.session_state.chat_history.append(("You", user_input_display))
         st.session_state.chat_history.append(("AI", response))
 
 # --- Display Chat History ---
