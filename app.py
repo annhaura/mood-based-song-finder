@@ -67,23 +67,25 @@ def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
 def explain_recommendation(song_title: str, mood: str, lang: str, user_input: str = "") -> str:
     try:
         if lang == "id":
-            prompt = f"Singkat saja ya. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}', berdasarkan pernyataan: '{user_input}', dalam gaya bicara santai dan empatik."
+            prompt = (
+                f"Singkat saja. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk mood '{mood}', "
+                f"berdasarkan pernyataan: '{user_input}', tanpa basa-basi, langsung ke poin."
+            )
         else:
-            prompt = f"Briefly explain in 1–2 sentences in a warm and friendly tone why the song '{song_title}' fits the mood '{mood}', based on what the user said: '{user_input}'."
-
-        response = llm.invoke(prompt).content.strip()
-        if not response or "gagal" in response.lower():
-            return f"This song fits the '{mood}' mood well and can be a comforting companion right now."
-        return response
+            prompt = (
+                f"Briefly explain in 1–2 sentences why the song '{song_title}' fits the mood '{mood}', "
+                f"based on: '{user_input}', without repeating the mood or feelings already acknowledged. Be clear and to the point."
+            )
+        return llm.invoke(prompt).content.strip()
     except:
-        return f"This song fits the '{mood}' mood well and can be a comforting companion right now."
+        return "❗ Gagal mengambil penjelasan."
 
 def generate_intro(user_input: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman curhat."
+            prompt = f"Tulis satu kalimat pendek dan netral menanggapi: '{user_input}'\nMood-nya: '{mood}'. Jangan terlalu panjang atau berlebihan."
         else:
-            prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
+            prompt = f"Write a short and neutral sentence responding to: '{user_input}'\nMood: '{mood}'. Avoid dramatic tone."
         return llm.invoke(prompt).content.strip()
     except:
         return ""
