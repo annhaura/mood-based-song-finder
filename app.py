@@ -54,9 +54,15 @@ def detect_language(text: str) -> str:
         return "en"
 
 @st.cache_data(show_spinner=False)
-def classify_mood_cached(query: str) -> str:
-    prompt = f"Classify the emotional mood of this text (examples: happy, sad, nostalgic, energetic, romantic):\n\n{query}"
-    return llm.invoke(prompt).content.strip().lower()
+def classify_mood(query: str, lang: str = "en") -> str:
+    if lang == "id":
+        prompt = f"Tentukan suasana hati dari teks ini (contoh: sedih, bahagia, galau, romantis, marah, netral):\n\n{query}\n\nJawab satu kata saja."
+    else:
+        prompt = f"Identify the emotional mood expressed in this text (e.g., sad, happy, nostalgic, angry, romantic, neutral):\n\n{query}\n\nRespond with one word only."
+    try:
+        return llm.invoke(prompt).content.strip().lower()
+    except:
+        return "netral" if lang == "id" else "neutral"
 
 @st.cache_data(show_spinner=False)
 def infer_genre_cached(query: str) -> str:
@@ -89,16 +95,21 @@ def generate_intro(user_input: str, mood: str, lang: str) -> str:
         return ""
 
 @st.cache_data(show_spinner=False)
-def is_followup_input(user_input: str) -> bool:
-    prompt = (
-        "Tentukan apakah pesan ini adalah kelanjutan dari obrolan rekomendasi lagu.\n"
-        "Jika pesannya meminta lagu tambahan, genre baru, atau melanjutkan topik sebelumnya, jawab hanya dengan 'yes'.\n"
-        "Jika pesannya adalah topik baru atau suasana hati baru yang berbeda, jawab hanya dengan 'no'.\n\n"
-        "Determine whether the following message is a follow-up in a music recommendation chat.\n"
-        "If it's asking for more songs, a new genre, or continuing the previous vibe, respond ONLY with 'yes'.\n"
-        "If it's a completely new topic or a different mood, respond ONLY with 'no'.\n\n"
-        f"Message: {user_input}"
-    )
+def is_followup_input(user_input: str, lang: str = "en") -> bool:
+    if lang == "id":
+        prompt = (
+            "Apakah pesan ini merupakan lanjutan dari obrolan rekomendasi lagu sebelumnya?\n"
+            "Jika ya (meminta lagu tambahan, ganti genre, lanjut topik), jawab 'yes'.\n"
+            "Jika pesan memulai topik/mood baru, jawab 'no'.\n\n"
+            f"Pesan: {user_input}"
+        )
+    else:
+        prompt = (
+            "Is this message a follow-up in a music recommendation chat?\n"
+            "If yes (asking for more songs, switching genre, continuing previous vibe), answer 'yes'.\n"
+            "If it's a new topic or mood, answer 'no'.\n\n"
+            f"Message: {user_input}"
+        )
     try:
         result = llm.invoke(prompt).content.strip().lower()
         return result == "yes"
@@ -117,19 +128,13 @@ lang_option = st.radio("Choose your language", ["Auto", "Bahasa Indonesia", "Eng
 # --- Chat Input ---
 user_input = st.chat_input("What kind of music do you want to hear today?")
 if user_input:
-    with st.spinner("🤖 Thinking..."):
-        if lang_option == "Auto":
-            lang = detect_language(user_input)
-        elif lang_option == "Bahasa Indonesia":
-            lang = "id"
-        else:
-            lang = "en"
+    with st.spinner("..."):
+        lang = detect_language(user_input)
+        followup = is_followup_input(user_input, lang)
 
-        is_followup = is_followup_input(user_input)
-
-        if not is_followup:
-            mood = classify_mood_cached(user_input)
-            genre = infer_genre_cached(user_input)
+        if not followup:
+            mood = classify_mood(user_input, lang)
+            genre = infer_genre(user_input)
             st.session_state.last_mood = mood
             st.session_state.last_genre = genre
             st.session_state.last_input = user_input
@@ -148,9 +153,9 @@ if user_input:
                 else "Hmm, I can't find more songs right now. Want to try another mood or genre?"
             )
         else:
-            if is_followup and "ganti" in user_input.lower():
+            if followup and "ganti" in user_input.lower():
                 intro = "Oke, kita coba suasana baru ya. Nih lagu-lagunya!" if lang == "id" else "Alright, here’s something in a new vibe!"
-            elif is_followup:
+            elif followup:
                 intro = "Ada lagi nih lagu lain yang mungkin kamu suka." if lang == "id" else "Sure! Here are some more songs you might like."
             else:
                 intro = generate_intro(user_input, mood, lang)
