@@ -84,6 +84,21 @@ def generate_intro(user_input: str, mood: str, lang: str) -> str:
     except:
         return ""
 
+def is_followup_input(user_input: str, previous_input: str = "") -> bool:
+    prompt = (
+        "Determine whether this message is a follow-up in a music recommendation chat.\n"
+        "A follow-up refers to asking for more songs, changing the genre, or continuing the last topic.\n"
+        "If it's continuing, respond with only 'yes'.\n"
+        "If it's a new mood, situation, or totally different topic, respond with only 'no'.\n\n"
+        f"Previous input: {previous_input}\n"
+        f"Current input: {user_input}"
+    )
+    try:
+        result = llm.invoke(prompt).content.strip().lower()
+        return result == "yes"
+    except:
+        return False
+
 # --- Memory Init ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -102,9 +117,17 @@ if user_input:
         if lang != st.session_state.last_lang:
             st.session_state.last_lang = lang
 
-        mood = classify_mood(user_input)
-        genre = infer_genre(f"The user said: '{user_input}'. Mood: {mood}.")
-        semantic_input = f"User said: '{user_input}'. Interpreted mood: {mood}. Genre suggestion: {genre}. Suggest fitting songs."
+        is_followup = is_followup_input(user_input, st.session_state.last_input)
+
+        if not is_followup:
+            mood = classify_mood(user_input)
+            genre = infer_genre(f"The user said: '{user_input}'. Mood: {mood}.")
+            st.session_state.last_input = user_input
+        else:
+            mood = classify_mood(st.session_state.last_input)
+            genre = infer_genre(f"The user said: '{st.session_state.last_input}'. Mood: {mood}.")
+
+        semantic_input = f"User said: '{user_input if not is_followup else st.session_state.last_input}'. Interpreted mood: {mood}. Genre suggestion: {genre}. Suggest fitting songs."
 
         songs = retrieve_similar_songs(semantic_input, k=2, exclude=st.session_state.seen_songs)
 
@@ -127,7 +150,6 @@ if user_input:
 
         st.session_state.chat_history.append(("You", user_input))
         st.session_state.chat_history.append(("AI", result))
-        st.session_state.last_input = user_input
 
 # --- Display Chat History ---
 for speaker, text in st.session_state.chat_history:
