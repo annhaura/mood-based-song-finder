@@ -12,15 +12,13 @@ st.set_page_config(page_title="🎵 Mood Song Finder", page_icon="🎶")
 st.title("🎶 Mood Song Finder")
 st.markdown("Find songs that match your mood. Powered by LangChain + Gemini LLM.")
 
-# --- API Key Input ---
-if "GOOGLE_API_KEY" not in st.session_state:
-    st.session_state.GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY") or st.text_input("Enter your **Google API Key**", type="password")
-
-if not st.session_state.GOOGLE_API_KEY:
+# --- API Key Input / Secret ---
+api_key = st.secrets.get("GOOGLE_API_KEY") or st.text_input("Enter your **Google API Key**", type="password")
+if not api_key:
     st.warning("Please enter your API Key to continue.", icon="🔑")
     st.stop()
+os.environ["GOOGLE_API_KEY"] = api_key
 
-os.environ["GOOGLE_API_KEY"] = st.session_state.GOOGLE_API_KEY
 
 # --- Load LLM & Memory ---
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.7)
