@@ -7,7 +7,6 @@ from langchain.memory import ConversationBufferMemory
 from langchain.agents import initialize_agent, Tool, AgentType
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
-from langchain.output_parsers import StrOutputParser
 from langchain.prompts import PromptTemplate
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain_core.utils import get_from_dict_or_env
