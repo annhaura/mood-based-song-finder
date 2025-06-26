@@ -84,16 +84,6 @@ def generate_intro(user_input: str, mood: str, lang: str) -> str:
     except:
         return ""
 
-def suggest_artists(genre: str, lang: str) -> str:
-    try:
-        if lang == "id":
-            prompt = f"Sebutkan 3–5 artis musik populer yang cocok dengan genre '{genre}' dan sedang relevan."
-        else:
-            prompt = f"Name 3–5 relevant and popular music artists in the '{genre}' genre."
-        return llm.invoke(prompt).content.strip()
-    except:
-        return ""
-
 # --- Memory Init ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -119,15 +109,12 @@ if user_input:
             )
         else:
             intro = generate_intro(user_input, mood, lang)
-            artist_info = suggest_artists(genre, lang)
             response_lines = [intro, ""]
             for song in songs:
                 st.session_state.seen_songs.add(song.page_content)
                 reason = explain_recommendation(song.page_content, mood, lang, user_input)
                 line = f"🎵 {song.page_content} 👉 {reason}"
                 response_lines.append(line)
-            if artist_info:
-                response_lines.append("\n**🎤 Recommended Artists:**\n" + artist_info)
             result = "\n\n".join(response_lines)
 
         st.session_state.chat_history.append(("You", user_input))
