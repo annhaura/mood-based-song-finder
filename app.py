@@ -12,12 +12,15 @@ st.set_page_config(page_title="🎵 Mood Song Finder", page_icon="🎶")
 st.title("🎶 Mood Song Finder")
 st.markdown("Find songs that match your mood. Powered by LangChain + Gemini LLM.")
 
-# --- API Key Input / Secret ---
-api_key = st.secrets.get("GOOGLE_API_KEY") or st.text_input("Enter your **Google API Key**", type="password")
-if not api_key:
+# --- API Key Input ---
+if "GOOGLE_API_KEY" not in st.session_state:
+    st.session_state.GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY") or st.text_input("Enter your **Google API Key**", type="password")
+
+if not st.session_state.GOOGLE_API_KEY:
     st.warning("Please enter your API Key to continue.", icon="🔑")
     st.stop()
-os.environ["GOOGLE_API_KEY"] = api_key
+
+os.environ["GOOGLE_API_KEY"] = st.session_state.GOOGLE_API_KEY
 
 # --- Load LLM & Memory ---
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.7)
@@ -27,17 +30,20 @@ memory = ConversationBufferMemory(memory_key="chat_history", return_messages=Tru
 csv_url = "https://raw.githubusercontent.com/annhaura/mood-song-finder/main/spotify_songs.csv"
 with st.spinner("📥 Loading dataset..."):
     df = pd.read_csv(csv_url).head(300)
-    df["combined_text"] = df.apply(lambda row: f"{row['track_name']} by {row['track_artist']}", axis=1)
+    df["combined_text"] = df.apply(lambda row:
+        f"{row['track_name']} by {row['track_artist']}. "
+        f"Genre: {row['playlist_genre']} ({row['playlist_subgenre']}). "
+        f"Valence: {row['valence']:.2f}, Energy: {row['energy']:.2f}, Danceability: {row['danceability']:.2f}.", axis=1)
     documents = [Document(page_content=text, metadata={"index": i}) for i, text in enumerate(df["combined_text"])]
 
 # --- Embedding & Vectorstore ---
 embedding_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_vectorstore():
-    if os.path.exists("faiss_index"):
+    try:
         return FAISS.load_local("faiss_index", embedding_model)
-    else:
+    except:
         vectorstore = FAISS.from_documents(documents, embedding_model)
         vectorstore.save_local("faiss_index")
         return vectorstore
@@ -86,10 +92,11 @@ def generate_intro(user_input: str, mood: str, lang: str) -> str:
 
 def is_followup_input(user_input: str) -> bool:
     prompt = (
-        "Is this message a follow-up in a conversation about music recommendation?\n"
-        "If it's continuing a previous mood or vibe, or asking for more music in a similar context, reply only 'yes'.\n"
-        "If it's a new topic or a different mood, reply only 'no'.\n\n"
-        f"Message: {user_input}"
+        "This is part of an AI conversation for music recommendation.\n"
+        "Decide whether the following message is a follow-up to the previous conversation about mood/music.\n"
+        "If YES, reply exactly with 'yes'. If it's a new topic, reply 'no'.\n\n"
+        f"Previous conversation: {st.session_state.last_input}\n"
+        f"Current message: {user_input}"
     )
     try:
         result = llm.invoke(prompt).content.strip().lower()
@@ -98,18 +105,9 @@ def is_followup_input(user_input: str) -> bool:
         return False
 
 # --- Memory Init ---
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "seen_songs" not in st.session_state:
-    st.session_state.seen_songs = set()
-if "last_lang" not in st.session_state:
-    st.session_state.last_lang = "en"
-if "last_input" not in st.session_state:
-    st.session_state.last_input = ""
-if "last_mood" not in st.session_state:
-    st.session_state.last_mood = ""
-if "last_genre" not in st.session_state:
-    st.session_state.last_genre = ""
+for key in ["chat_history", "seen_songs", "last_lang", "last_input", "last_mood", "last_genre"]:
+    if key not in st.session_state:
+        st.session_state[key] = [] if key == "chat_history" else set() if key == "seen_songs" else ""
 
 # --- Chat Input ---
 user_input = st.chat_input("What kind of music do you want to hear today?")
