@@ -53,11 +53,13 @@ def detect_language(text: str) -> str:
     except:
         return "en"
 
-def classify_mood(query: str) -> str:
+@st.cache_data(show_spinner=False)
+def classify_mood_cached(query: str) -> str:
     prompt = f"Classify the emotional mood of this text (examples: happy, sad, nostalgic, energetic, romantic):\n\n{query}"
     return llm.invoke(prompt).content.strip().lower()
 
-def infer_genre(query: str) -> str:
+@st.cache_data(show_spinner=False)
+def infer_genre_cached(query: str) -> str:
     prompt = f"Suggest a suitable music genre for this mood or query:\n\n{query}"
     return llm.invoke(prompt).content.strip()
 
@@ -79,9 +81,9 @@ def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
 def generate_intro(user_input: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Buat satu paragraf singkat dan manusiawi sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman."
+            prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman curhat."
         else:
-            prompt = f"Write a short, human-made paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a friend."
+            prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
         return llm.invoke(prompt).content.strip()
     except:
         return ""
@@ -108,29 +110,26 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "seen_songs" not in st.session_state:
     st.session_state.seen_songs = set()
-if "mood_cache" not in st.session_state:
-    st.session_state.mood_cache = {}
-if "genre_cache" not in st.session_state:
-    st.session_state.genre_cache = {}
+
+# --- Language Toggle ---
+lang_option = st.radio("Choose your language", ["Auto", "Bahasa Indonesia", "English"], index=0)
 
 # --- Chat Input ---
 user_input = st.chat_input("What kind of music do you want to hear today?")
 if user_input:
     with st.spinner("🤖 Thinking..."):
-        lang = detect_language(user_input)
+        if lang_option == "Auto":
+            lang = detect_language(user_input)
+        elif lang_option == "Bahasa Indonesia":
+            lang = "id"
+        else:
+            lang = "en"
+
         is_followup = is_followup_input(user_input)
 
         if not is_followup:
-            mood = st.session_state.mood_cache.get(user_input)
-            if not mood:
-                mood = classify_mood(user_input)
-                st.session_state.mood_cache[user_input] = mood
-
-            genre = st.session_state.genre_cache.get(user_input)
-            if not genre:
-                genre = infer_genre(user_input)
-                st.session_state.genre_cache[user_input] = genre
-
+            mood = classify_mood_cached(user_input)
+            genre = infer_genre_cached(user_input)
             st.session_state.last_mood = mood
             st.session_state.last_genre = genre
             st.session_state.last_input = user_input
