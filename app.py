@@ -67,9 +67,9 @@ def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
 def explain_recommendation(song_title: str, mood: str, lang: str, user_input: str = "") -> str:
     try:
         if lang == "id":
-            prompt = f"Singkat saja ya. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}', berdasarkan pernyataan: '{user_input}', dalam gaya bicara santai dan empatik."
+            prompt = f"Singkat saja ya. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk mood '{mood}', berdasarkan pernyataan: '{user_input}'. Gaya bicara santai dan langsung ke inti."
         else:
-            prompt = f"Briefly explain in 1–2 sentences in a warm and friendly tone why the song '{song_title}' fits the mood '{mood}', based on what the user said: '{user_input}'."
+            prompt = f"In 1–2 short sentences, explain why '{song_title}' fits the mood '{mood}' based on: '{user_input}'. Be direct, warm, and avoid repeating emotions already mentioned."
         return llm.invoke(prompt).content.strip()
     except:
         return "❗ Gagal mengambil penjelasan."
@@ -77,36 +77,19 @@ def explain_recommendation(song_title: str, mood: str, lang: str, user_input: st
 def generate_intro(user_input: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman curhat."
+            prompt = f"Respons singkat dan empatik untuk seseorang yang bilang: '{user_input}' (mood: '{mood}'). Hindari basa-basi berlebihan. 2–3 kalimat cukup."
         else:
-            prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
+            prompt = f"Write a short, warm, and natural response to someone who says: '{user_input}' (mood: '{mood}'). Avoid excessive intro or dramatic tone. 2–3 short sentences only."
         return llm.invoke(prompt).content.strip()
     except:
         return ""
 
 def is_followup_input(user_input: str) -> bool:
-    last_input = st.session_state.last_input
     prompt = (
-        "You are analyzing a conversation about music recommendations.\n"
-        "Here is the previous user message: "
-        f"'{last_input}'\n"
-        "Here is the current user message: "
-        f"'{user_input}'\n\n"
-        "Determine if the current message is a follow-up to the previous one — for example, asking for more songs, similar mood, or changing genre based on the same emotional context.\n"
-        "Respond with 'yes' if it’s a continuation, or 'no' if it starts a new mood/topic.\n"
-        "Answer with only 'yes' or 'no'."
-    )
-    try:
-        result = llm.invoke(prompt).content.strip().lower()
-        return result == "yes"
-    except:
-        return False
-
-def contains_new_emotion(text: str) -> bool:
-    prompt = (
-        "Does the following message include a clear emotional shift or a new emotional state (e.g., from anxious to excited, sad to happy)?\n"
-        "Respond with 'yes' if the emotional tone clearly changed, or 'no' if it stays the same.\n\n"
-        f"Message: {text}"
+        "Is this message a follow-up in a conversation about music recommendation?\n"
+        "If it's continuing a previous mood or vibe, or asking for more music in a similar context, reply only 'yes'.\n"
+        "If it's a new topic or a different mood, reply only 'no'.\n\n"
+        f"Message: {user_input}"
     )
     try:
         result = llm.invoke(prompt).content.strip().lower()
@@ -137,9 +120,8 @@ if user_input:
             st.session_state.last_lang = lang
 
         is_followup = is_followup_input(user_input)
-        emotion_shifted = contains_new_emotion(user_input)
 
-        if is_followup and not emotion_shifted:
+        if is_followup:
             mood = st.session_state.last_mood
             genre = st.session_state.last_genre
             semantic_input = f"User said: '{user_input}' (context: '{st.session_state.last_input}'). Mood: {mood}. Genre: {genre}. Suggest fitting songs."
