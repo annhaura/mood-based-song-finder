@@ -69,9 +69,9 @@ def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
 def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Jelaskan kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}' dalam gaya bicara santai dan empatik."
+            prompt = f"Singkat saja ya. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}' dalam gaya bicara santai dan empatik."
         else:
-            prompt = f"Explain in a warm, friendly way why the song '{song_title}' fits the mood '{mood}'."
+            prompt = f"Briefly explain (in 1–2 sentences) in a warm and friendly tone why the song '{song_title}' fits the mood '{mood}'."
         return llm.invoke(prompt).content.strip()
     except:
         return "❗ Gagal mengambil penjelasan."
@@ -98,7 +98,9 @@ if user_input:
     with st.spinner("🤖 Thinking..."):
         lang = detect_language(user_input)
 
-        is_followup = any(keyword in user_input.lower() for keyword in ["lagi dong", "lagi ya", "other", "recs", "ada lagi", "more", "ganti"])
+        is_followup = any(keyword in user_input.lower() for keyword in [
+            "lagi dong", "lagi ya", "other", "recs", "ada lagi", "more", "ganti", "ganti genre", "genre lain"
+        ])
 
         if not is_followup:
             mood = classify_mood(user_input)
@@ -110,24 +112,36 @@ if user_input:
         else:
             mood = st.session_state.get("last_mood", "neutral")
             genre = st.session_state.get("last_genre", "pop")
-            semantic_input = st.session_state.get("last_input", user_input)
+            semantic_input = st.session_state.get("last_input", "")
 
         songs = retrieve_similar_songs(f"{semantic_input}, genre: {genre}", k=2, exclude=st.session_state.seen_songs)
 
         if not songs:
-            response = "😕 Belum nemu lagu lain yang pas. Mau coba mood atau genre lain?" if lang == "id" else "Hmm, I can't find more songs right now. Want to try another mood or genre?"
+            response = (
+                "😕 Belum nemu lagu lain yang pas. Mau coba mood atau genre lain?"
+                if lang == "id"
+                else "Hmm, I can't find more songs right now. Want to try another mood or genre?"
+            )
         else:
-            intro = generate_intro(semantic_input, mood, lang) if not is_followup else ("Oke! Nih ada lagi lagu yang mungkin kamu suka." if lang == "id" else "Sure! Here are a few more you might like.")
+            if is_followup and "ganti" in user_input.lower():
+                intro = "Oke, kita coba suasana baru ya. Nih lagu-lagunya!" if lang == "id" else "Alright, here’s something in a new vibe!"
+            elif is_followup:
+                intro = "Ada lagi nih lagu lain yang mungkin kamu suka." if lang == "id" else "Sure! Here are some more songs you might like."
+            else:
+                intro = generate_intro(user_input, mood, lang)
+
             response_lines = [intro, ""]
             for song in songs:
                 st.session_state.seen_songs.add(song.page_content)
-                reason = explain_recommendation(song.page_content, mood, lang)
+                reason = short_explain(song.page_content, mood, lang)
                 line = f"🎵 {song.page_content} 👉 {reason}"
                 response_lines.append(line)
+
             response = "\n\n".join(response_lines)
 
         st.session_state.chat_history.append(("You", user_input))
         st.session_state.chat_history.append(("AI", response))
+
 
 # --- Display Chat History ---
 for speaker, text in st.session_state.chat_history:
