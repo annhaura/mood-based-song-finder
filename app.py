@@ -102,6 +102,18 @@ def is_followup_input(user_input: str) -> bool:
     except:
         return False
 
+def contains_new_emotion(text: str) -> bool:
+    prompt = (
+        "Does the following message include a clear emotional shift or a new emotional state (e.g., from anxious to excited, sad to happy)?\n"
+        "Respond with 'yes' if the emotional tone clearly changed, or 'no' if it stays the same.\n\n"
+        f"Message: {text}"
+    )
+    try:
+        result = llm.invoke(prompt).content.strip().lower()
+        return result == "yes"
+    except:
+        return False
+
 # --- Memory Init ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -125,8 +137,9 @@ if user_input:
             st.session_state.last_lang = lang
 
         is_followup = is_followup_input(user_input)
+        emotion_shifted = contains_new_emotion(user_input)
 
-        if is_followup:
+        if is_followup and not emotion_shifted:
             mood = st.session_state.last_mood
             genre = st.session_state.last_genre
             semantic_input = f"User said: '{user_input}' (context: '{st.session_state.last_input}'). Mood: {mood}. Genre: {genre}. Suggest fitting songs."
