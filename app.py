@@ -10,8 +10,8 @@ from langchain.docstore.document import Document
 from langdetect import detect
 
 # --- Streamlit Setup ---
-st.set_page_config(page_title="Mood-Based Song Finder", page_icon="🎶")
-st.title("🎶 Mood-Based Song Finder")
+st.set_page_config(page_title="🎵 Mood Song Finder", page_icon="🎶")
+st.title("🎶 Mood Song Finder")
 st.markdown("Find songs that match your mood. Powered by LangChain + Gemini LLM.")
 
 # --- API Key Input / Secret ---
@@ -69,9 +69,9 @@ def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
 def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Jelaskan kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}' dalam gaya bicara santai dan empatik. Singkat saja, maksimal 2 kalimat."
+            prompt = f"Jelaskan kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}' dalam gaya bicara santai tapi sopan, cukup 2-3 kalimat."
         else:
-            prompt = f"Explain in a warm, friendly way why the song '{song_title}' fits the mood '{mood}' in no more than 2 sentences."
+            prompt = f"Explain in a warm, friendly tone why the song '{song_title}' fits the mood '{mood}' in 2-3 sentences."
         return llm.invoke(prompt).content.strip()
     except:
         return "❗ Gagal mengambil penjelasan."
@@ -79,9 +79,9 @@ def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
 def generate_intro(user_input: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman curhat."
+            prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: {user_input}. Mood-nya adalah: {mood}. Tulis dengan gaya manusiawi, sopan, dan suportif."
         else:
-            prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
+            prompt = f"Write a short, empathetic paragraph responding to someone who says: {user_input}. Their mood is: {mood}. Respond as a caring, human friend."
         return llm.invoke(prompt).content.strip()
     except:
         return ""
@@ -93,40 +93,39 @@ if "seen_songs" not in st.session_state:
     st.session_state.seen_songs = set()
 
 # --- Chat Input ---
-user_input_display = st.chat_input("What kind of music do you want to hear today?")
-if user_input_display:
+user_input = st.chat_input("What kind of music do you want to hear today?")
+if user_input:
     with st.spinner("🤖 Thinking..."):
-        lang = detect_language(user_input_display)
+        lang = detect_language(user_input)
 
-        is_followup = any(keyword in user_input_display.lower() for keyword in ["lagi dong", "lagi ya", "other", "recs", "ada lagi", "more", "ganti"])
+        followup_keywords = ["lagi dong", "lagi ya", "other", "recs", "ada lagi", "more", "ganti"]
+        is_followup = any(keyword in user_input.lower() for keyword in followup_keywords)
 
         if not is_followup:
-            mood = classify_mood(user_input_display)
-            genre = infer_genre(user_input_display)
+            mood = classify_mood(user_input)
+            genre = infer_genre(user_input)
             st.session_state.last_mood = mood
             st.session_state.last_genre = genre
-            st.session_state.last_input = user_input_display
-            user_input_context = user_input_display
+            st.session_state.last_input = user_input
         else:
             mood = st.session_state.get("last_mood", "neutral")
-            genre = st.session_state.get("last_genre", "pop")
-            user_input_context = st.session_state.get("last_input", user_input_display)
+            genre = infer_genre(user_input) if any(g in user_input.lower() for g in ["ganti genre", "genre"] ) else st.session_state.get("last_genre", "pop")
+            user_input = user_input  # Do NOT overwrite user input text
 
-        songs = retrieve_similar_songs(f"{user_input_context}, genre: {genre}", k=2, exclude=st.session_state.seen_songs)
+        songs = retrieve_similar_songs(f"{user_input}, genre: {genre}", k=2, exclude=st.session_state.seen_songs)
 
         if not songs:
             response = "😕 Belum nemu lagu lain yang pas. Mau coba mood atau genre lain?" if lang == "id" else "Hmm, I can't find more songs right now. Want to try another mood or genre?"
         else:
-            intro = generate_intro(user_input_context, mood, lang) if not is_followup else ("Oke! Nih ada lagi lagu yang mungkin kamu suka." if lang == "id" else "Sure! Here are a few more you might like.")
+            intro = generate_intro(user_input, mood, lang) if not is_followup else ("Oke! Ini beberapa lagu lainnya yang mungkin kamu suka." if lang == "id" else "Sure! Here are a few more songs you might like.")
             response_lines = [intro, ""]
             for song in songs:
                 st.session_state.seen_songs.add(song.page_content)
                 reason = explain_recommendation(song.page_content, mood, lang)
-                line = f"🎵 {song.page_content} 👉 {reason}"
-                response_lines.append(line)
+                response_lines.append(f"🎵 {song.page_content} 👉 {reason}")
             response = "\n\n".join(response_lines)
 
-        st.session_state.chat_history.append(("You", user_input_display))
+        st.session_state.chat_history.append(("You", user_input))
         st.session_state.chat_history.append(("AI", response))
 
 # --- Display Chat History ---
