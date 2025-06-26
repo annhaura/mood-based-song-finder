@@ -55,8 +55,8 @@ def classify_mood(query: str) -> str:
     prompt = f"Describe the user's emotional mood in 1–3 words (e.g. happy, sad, nostalgic, energetic, romantic, etc):\n\n{query}"
     return llm.invoke(prompt).content.strip().lower()
 
-def infer_genre(mood: str) -> str:
-    prompt = f"The user feels: {mood}. Based on that mood, suggest a music genre."
+def infer_genre(query: str) -> str:
+    prompt = f"Suggest a suitable music genre based on this input: {query}"
     return llm.invoke(prompt).content.strip()
 
 def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
@@ -64,12 +64,12 @@ def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
     filtered = [doc for doc in results if doc.page_content not in exclude]
     return filtered[:k]
 
-def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
+def explain_recommendation(song_title: str, mood: str, lang: str, user_input: str = "") -> str:
     try:
         if lang == "id":
-            prompt = f"Singkat saja ya. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}' dalam gaya bicara santai dan empatik."
+            prompt = f"Singkat saja ya. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}', berdasarkan pernyataan: '{user_input}', dalam gaya bicara santai dan empatik."
         else:
-            prompt = f"Briefly explain (in 1–2 sentences) in a warm and friendly tone why the song '{song_title}' fits the mood '{mood}'."
+            prompt = f"Briefly explain in 1–2 sentences in a warm and friendly tone why the song '{song_title}' fits the mood '{mood}', based on what the user said: '{user_input}'."
         return llm.invoke(prompt).content.strip()
     except:
         return "❗ Gagal mengambil penjelasan."
@@ -80,6 +80,16 @@ def generate_intro(user_input: str, mood: str, lang: str) -> str:
             prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman curhat."
         else:
             prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
+        return llm.invoke(prompt).content.strip()
+    except:
+        return ""
+
+def suggest_artists(genre: str, lang: str) -> str:
+    try:
+        if lang == "id":
+            prompt = f"Sebutkan 3–5 artis musik populer yang cocok dengan genre '{genre}' dan sedang relevan."
+        else:
+            prompt = f"Name 3–5 relevant and popular music artists in the '{genre}' genre."
         return llm.invoke(prompt).content.strip()
     except:
         return ""
@@ -96,8 +106,8 @@ if user_input:
     with st.spinner("🤖 Thinking..."):
         lang = detect_language(user_input)
         mood = classify_mood(user_input)
-        genre = infer_genre(mood)
-        semantic_input = f"{user_input}, genre: {genre}"
+        genre = infer_genre(user_input)
+        semantic_input = f"User said: '{user_input}'. Interpreted mood: {mood}. Genre suggestion: {genre}. Suggest fitting songs."
 
         songs = retrieve_similar_songs(semantic_input, k=2, exclude=st.session_state.seen_songs)
 
@@ -109,12 +119,15 @@ if user_input:
             )
         else:
             intro = generate_intro(user_input, mood, lang)
+            artist_info = suggest_artists(genre, lang)
             response_lines = [intro, ""]
             for song in songs:
                 st.session_state.seen_songs.add(song.page_content)
-                reason = explain_recommendation(song.page_content, mood, lang)
+                reason = explain_recommendation(song.page_content, mood, lang, user_input)
                 line = f"🎵 {song.page_content} 👉 {reason}"
                 response_lines.append(line)
+            if artist_info:
+                response_lines.append("\n**🎤 Recommended Artists:**\n" + artist_info)
             result = "\n\n".join(response_lines)
 
         st.session_state.chat_history.append(("You", user_input))
