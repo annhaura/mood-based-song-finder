@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-from random import shuffle
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.memory import ConversationBufferMemory
 from langchain.agents import initialize_agent, Tool, AgentType
@@ -53,20 +52,12 @@ def detect_language(text: str) -> str:
     except:
         return "en"
 
-@st.cache_data(show_spinner=False)
-def classify_mood(query: str, lang: str = "en") -> str:
-    if lang == "id":
-        prompt = f"Tentukan suasana hati dari teks ini (contoh: sedih, bahagia, galau, romantis, marah, netral):\n\n{query}\n\nJawab satu kata saja."
-    else:
-        prompt = f"Identify the emotional mood expressed in this text (e.g., sad, happy, nostalgic, angry, romantic, neutral):\n\n{query}\n\nRespond with one word only."
-    try:
-        return llm.invoke(prompt).content.strip().lower()
-    except:
-        return "netral" if lang == "id" else "neutral"
+def classify_mood(query: str) -> str:
+    prompt = f"Describe the user's emotional mood in 1–3 words (e.g. happy, sad, nostalgic, energetic, romantic, etc):\n\n{query}"
+    return llm.invoke(prompt).content.strip().lower()
 
-@st.cache_data(show_spinner=False)
-def infer_genre_cached(query: str) -> str:
-    prompt = f"Suggest a suitable music genre for this mood or query:\n\n{query}"
+def infer_genre(mood: str) -> str:
+    prompt = f"The user feels: {mood}. Based on that mood, suggest a music genre."
     return llm.invoke(prompt).content.strip()
 
 def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
@@ -84,37 +75,21 @@ def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
     except:
         return "❗ Gagal mengambil penjelasan."
 
-def generate_intro(user_input: str, mood: str, lang: str) -> str:
-    try:
-        if lang == "id":
-            prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman curhat."
-        else:
-            prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
-        return llm.invoke(prompt).content.strip()
-    except:
-        return ""
+# --- Tools & Agent ---
+tools = [
+    Tool(name="ClassifyMood", func=classify_mood, description="Classify user's mood from text"),
+    Tool(name="InferGenre", func=infer_genre, description="Suggest a genre for the given mood"),
+    Tool(name="RetrieveSongs", func=lambda q: retrieve_similar_songs(q), description="Find songs based on query"),
+    Tool(name="ExplainSong", func=lambda x: explain_recommendation(x, 'default', 'en'), description="Explain why song fits mood")
+]
 
-@st.cache_data(show_spinner=False)
-def is_followup_input(user_input: str, lang: str = "en") -> bool:
-    if lang == "id":
-        prompt = (
-            "Apakah pesan ini merupakan lanjutan dari obrolan rekomendasi lagu sebelumnya?\n"
-            "Jika ya (meminta lagu tambahan, ganti genre, lanjut topik), jawab 'yes'.\n"
-            "Jika pesan memulai topik/mood baru, jawab 'no'.\n\n"
-            f"Pesan: {user_input}"
-        )
-    else:
-        prompt = (
-            "Is this message a follow-up in a music recommendation chat?\n"
-            "If yes (asking for more songs, switching genre, continuing previous vibe), answer 'yes'.\n"
-            "If it's a new topic or mood, answer 'no'.\n\n"
-            f"Message: {user_input}"
-        )
-    try:
-        result = llm.invoke(prompt).content.strip().lower()
-        return result == "yes"
-    except:
-        return False
+agent = initialize_agent(
+    tools=tools,
+    llm=llm,
+    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+    verbose=True,
+    memory=memory
+)
 
 # --- Memory Init ---
 if "chat_history" not in st.session_state:
@@ -122,55 +97,15 @@ if "chat_history" not in st.session_state:
 if "seen_songs" not in st.session_state:
     st.session_state.seen_songs = set()
 
-# --- Language Toggle ---
-lang_option = st.radio("Choose your language", ["Auto", "Bahasa Indonesia", "English"], index=0)
-
 # --- Chat Input ---
 user_input = st.chat_input("What kind of music do you want to hear today?")
 if user_input:
-    with st.spinner("..."):
+    with st.spinner("🤖..."):
         lang = detect_language(user_input)
-        followup = is_followup_input(user_input, lang)
-
-        if not followup:
-            mood = classify_mood(user_input, lang)
-            genre = infer_genre(user_input)
-            st.session_state.last_mood = mood
-            st.session_state.last_genre = genre
-            st.session_state.last_input = user_input
-            semantic_input = user_input
-        else:
-            mood = st.session_state.get("last_mood", "neutral")
-            genre = st.session_state.get("last_genre", "pop")
-            semantic_input = st.session_state.get("last_input", "")
-
-        songs = retrieve_similar_songs(f"{semantic_input}, genre: {genre}", k=2, exclude=st.session_state.seen_songs)
-
-        if not songs:
-            response = (
-                "😕 Belum nemu lagu lain yang pas. Mau coba mood atau genre lain?"
-                if lang == "id"
-                else "Hmm, I can't find more songs right now. Want to try another mood or genre?"
-            )
-        else:
-            if followup and "ganti" in user_input.lower():
-                intro = "Oke, kita coba suasana baru ya. Nih lagu-lagunya!" if lang == "id" else "Alright, here’s something in a new vibe!"
-            elif followup:
-                intro = "Ada lagi nih lagu lain yang mungkin kamu suka." if lang == "id" else "Sure! Here are some more songs you might like."
-            else:
-                intro = generate_intro(user_input, mood, lang)
-
-            response_lines = [intro, ""]
-            for song in songs:
-                st.session_state.seen_songs.add(song.page_content)
-                reason = explain_recommendation(song.page_content, mood, lang)
-                line = f"🎵 {song.page_content} 👉 {reason}"
-                response_lines.append(line)
-
-            response = "\n\n".join(response_lines)
+        result = agent.run(user_input)
 
         st.session_state.chat_history.append(("You", user_input))
-        st.session_state.chat_history.append(("AI", response))
+        st.session_state.chat_history.append(("AI", result))
 
 # --- Display Chat History ---
 for speaker, text in st.session_state.chat_history:
