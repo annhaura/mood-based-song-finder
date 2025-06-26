@@ -79,32 +79,58 @@ def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
 def generate_intro(user_input: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman curhat."
+            prompt = f"Buat satu paragraf singkat dan manusiawi sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman."
         else:
-            prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
+            prompt = f"Write a short, human-made paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a friend."
         return llm.invoke(prompt).content.strip()
     except:
         return ""
+
+@st.cache_data(show_spinner=False)
+def is_followup_input(user_input: str) -> bool:
+    prompt = (
+        "Tentukan apakah pesan ini adalah kelanjutan dari obrolan rekomendasi lagu.\n"
+        "Jika pesannya meminta lagu tambahan, genre baru, atau melanjutkan topik sebelumnya, jawab hanya dengan 'yes'.\n"
+        "Jika pesannya adalah topik baru atau suasana hati baru yang berbeda, jawab hanya dengan 'no'.\n\n"
+        "Determine whether the following message is a follow-up in a music recommendation chat.\n"
+        "If it's asking for more songs, a new genre, or continuing the previous vibe, respond ONLY with 'yes'.\n"
+        "If it's a completely new topic or a different mood, respond ONLY with 'no'.\n\n"
+        f"Message: {user_input}"
+    )
+    try:
+        result = llm.invoke(prompt).content.strip().lower()
+        return result == "yes"
+    except:
+        return False
 
 # --- Memory Init ---
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "seen_songs" not in st.session_state:
     st.session_state.seen_songs = set()
+if "mood_cache" not in st.session_state:
+    st.session_state.mood_cache = {}
+if "genre_cache" not in st.session_state:
+    st.session_state.genre_cache = {}
 
 # --- Chat Input ---
 user_input = st.chat_input("What kind of music do you want to hear today?")
 if user_input:
     with st.spinner("🤖 Thinking..."):
         lang = detect_language(user_input)
-
-        is_followup = any(keyword in user_input.lower() for keyword in [
-            "lagi dong", "lagi ya", "other", "recs", "ada lagi", "more", "ganti", "ganti genre", "genre lain"
-        ])
+        is_followup = is_followup_input(user_input)
 
         if not is_followup:
-            mood = classify_mood(user_input)
-            genre = infer_genre(user_input)
+            mood = st.session_state.mood_cache.get(user_input)
+            if not mood:
+                mood = classify_mood(user_input)
+                st.session_state.mood_cache[user_input] = mood
+
+            genre = st.session_state.genre_cache.get(user_input)
+            if not genre:
+                genre = infer_genre(user_input)
+                st.session_state.genre_cache[user_input] = genre
+
             st.session_state.last_mood = mood
             st.session_state.last_genre = genre
             st.session_state.last_input = user_input
@@ -141,7 +167,6 @@ if user_input:
 
         st.session_state.chat_history.append(("You", user_input))
         st.session_state.chat_history.append(("AI", response))
-
 
 # --- Display Chat History ---
 for speaker, text in st.session_state.chat_history:
