@@ -133,7 +133,7 @@ if user_input:
             response_lines = [intro, ""]
             for song in songs:
                 st.session_state.seen_songs.add(song.page_content)
-                reason = short_explain(song.page_content, mood, lang)
+                reason = explain_recommendation(song.page_content, mood, lang)
                 line = f"🎵 {song.page_content} 👉 {reason}"
                 response_lines.append(line)
 
