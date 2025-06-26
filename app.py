@@ -67,12 +67,17 @@ def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
 def explain_recommendation(song_title: str, mood: str, lang: str, user_input: str = "") -> str:
     try:
         if lang == "id":
-            prompt = f"Singkat saja ya. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk mood '{mood}', berdasarkan pernyataan: '{user_input}'. Gaya bicara santai dan langsung ke inti."
+            prompt = f"Singkat saja ya. Jelaskan dalam 1–2 kalimat kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}', berdasarkan pernyataan: '{user_input}', dalam gaya bicara santai dan empatik."
         else:
-            prompt = f"In 1–2 short sentences, explain why '{song_title}' fits the mood '{mood}' based on: '{user_input}'. Be direct, warm, and avoid repeating emotions already mentioned."
-        return llm.invoke(prompt).content.strip()
+            prompt = f"Briefly explain in 1–2 sentences in a warm and friendly tone why the song '{song_title}' fits the mood '{mood}', based on what the user said: '{user_input}'."
+        
+        response = llm.invoke(prompt).content.strip()
+        if not response or "Gagal" in response.lower():
+            # fallback
+            return f"Lagu ini cocok karena energinya sesuai mood '{mood}' dan bisa jadi teman yang pas buat kamu."
+        return response
     except:
-        return "❗ Gagal mengambil penjelasan."
+        return f"Lagu ini cocok karena energinya sesuai mood '{mood}' dan bisa jadi teman yang pas buat kamu."
 
 def generate_intro(user_input: str, mood: str, lang: str) -> str:
     try:
