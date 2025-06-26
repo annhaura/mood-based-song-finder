@@ -7,11 +7,6 @@ from langchain.memory import ConversationBufferMemory
 from langchain.agents import initialize_agent, Tool, AgentType
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
-from langchain.prompts import PromptTemplate
-from langchain.callbacks.base import BaseCallbackHandler
-from langchain_core.utils import get_from_dict_or_env
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage
 from langdetect import detect
 
 # --- Streamlit Setup ---
@@ -27,7 +22,7 @@ if not api_key:
 os.environ["GOOGLE_API_KEY"] = api_key
 
 # --- Load LLM & Memory ---
-llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.7)
 memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
 # --- Load Dataset ---
@@ -66,7 +61,7 @@ def infer_genre(query: str) -> str:
     prompt = f"Suggest a suitable music genre for this mood or query:\n\n{query}"
     return llm.invoke(prompt).content.strip()
 
-def retrieve_similar_songs(query: str, k=3) -> list:
+def retrieve_similar_songs(query: str, k=2) -> list:
     return vectorstore.similarity_search(query, k=k)
 
 def randomize_list(text_block: str) -> str:
@@ -75,11 +70,14 @@ def randomize_list(text_block: str) -> str:
     return "\n".join(lines)
 
 def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
-    if lang == "id":
-        prompt = f"Jelaskan kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}' dalam 1 kalimat."
-    else:
-        prompt = f"Explain in one sentence why the song '{song_title}' fits the mood '{mood}'."
-    return llm.invoke(prompt).content.strip()
+    try:
+        if lang == "id":
+            prompt = f"Jelaskan kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}' dalam 1 kalimat."
+        else:
+            prompt = f"Explain in one sentence why the song '{song_title}' fits the mood '{mood}'."
+        return llm.invoke(prompt).content.strip()
+    except Exception as e:
+        return "❗ Gagal mengambil penjelasan."
 
 # --- Tools List ---
 tools = [
@@ -109,7 +107,7 @@ if user_input:
         lang = detect_language(user_input)
         mood = classify_mood(user_input)
         genre = infer_genre(user_input)
-        songs = retrieve_similar_songs(f"{user_input}, genre: {genre}", k=3)
+        songs = retrieve_similar_songs(f"{user_input}, genre: {genre}", k=2)
 
         if not songs:
             response = "🤔 Maaf, aku belum bisa menemukan lagu yang cocok. Coba ganti mood atau genre?" if lang == "id" else "Sorry, I couldn't find matching songs. Want to try a different mood or genre?"
