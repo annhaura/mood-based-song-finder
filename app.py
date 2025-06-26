@@ -69,19 +69,21 @@ def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
 def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
     try:
         if lang == "id":
-            prompt = f"Dalam 2-3 kalimat santai dan empatik, jelaskan kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}'. Hindari gaya bahasa terlalu kasual seperti 'gue/lo'."
+            prompt = f"Kenapa lagu '{song_title}' cocok buat suasana hati '{mood}'? Jawab santai, maksimal 2-3 kalimat."
         else:
-            prompt = f"In 2-3 friendly sentences, explain why the song '{song_title}' fits the mood '{mood}' in a natural, conversational way."
+            prompt = f"Why is the song '{song_title}' a good match for the mood '{mood}'? Keep it friendly and under 3 sentences."
         return llm.invoke(prompt).content.strip()
     except:
         return "❗ Gagal mengambil penjelasan."
 
-def generate_intro(user_input: str, mood: str, lang: str) -> str:
+def generate_intro(user_input: str, mood: str, lang: str, is_followup: bool) -> str:
     try:
+        if is_followup:
+            return "Oke! Nih ada lagu lain yang mungkin kamu suka." if lang == "id" else "Sure! Here's another one you might like."
         if lang == "id":
-            prompt = f"Tanggapi curhatan berikut dalam satu paragraf empatik dan sopan: '{user_input}'. Mood-nya adalah: '{mood}'. Hindari gaya bahasa 'gue/lo'."
+            prompt = f"Buat sapaan dan tanggapan empatik terhadap: '{user_input}' dengan suasana hati '{mood}'. Tulis seolah kamu teman curhat."
         else:
-            prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
+            prompt = f"Write a warm, empathetic greeting for someone who says: '{user_input}' and feels '{mood}'. Make it sound like a caring friend."
         return llm.invoke(prompt).content.strip()
     except:
         return ""
@@ -98,7 +100,8 @@ if user_input:
     with st.spinner("🤖 Thinking..."):
         lang = detect_language(user_input)
 
-        is_followup = any(keyword in user_input.lower() for keyword in ["lagi dong", "lagi ya", "other", "recs", "ada lagi", "more", "ganti"])
+        is_followup = any(keyword in user_input.lower() for keyword in [
+            "lagi dong", "lagi ya", "other", "recs", "ada lagi", "more", "ganti", "lainnya"])
 
         if not is_followup:
             mood = classify_mood(user_input)
@@ -116,7 +119,7 @@ if user_input:
         if not songs:
             response = "😕 Belum nemu lagu lain yang pas. Mau coba mood atau genre lain?" if lang == "id" else "Hmm, I can't find more songs right now. Want to try another mood or genre?"
         else:
-            intro = generate_intro(user_input, mood, lang) if not is_followup else ("Berikutnya beberapa lagu lain yang mungkin cocok:" if lang == "id" else "Here are a few more you might like:")
+            intro = generate_intro(user_input, mood, lang, is_followup)
             response_lines = [intro, ""]
             for song in songs:
                 st.session_state.seen_songs.add(song.page_content)
