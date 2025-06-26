@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import difflib
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.memory import ConversationBufferMemory
 from langchain_community.vectorstores import FAISS
@@ -12,13 +13,15 @@ st.set_page_config(page_title="🎵 Mood Song Finder", page_icon="🎶")
 st.title("🎶 Mood Song Finder")
 st.markdown("Find songs that match your mood. Powered by LangChain + Gemini LLM.")
 
-# --- API Key Input / Secret ---
-api_key = st.secrets.get("GOOGLE_API_KEY") or st.text_input("Enter your **Google API Key**", type="password")
-if not api_key:
+# --- API Key Input ---
+if "GOOGLE_API_KEY" not in st.session_state:
+    st.session_state.GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY") or st.text_input("Enter your **Google API Key**", type="password")
+
+if not st.session_state.GOOGLE_API_KEY:
     st.warning("Please enter your API Key to continue.", icon="🔑")
     st.stop()
-os.environ["GOOGLE_API_KEY"] = api_key
 
+os.environ["GOOGLE_API_KEY"] = st.session_state.GOOGLE_API_KEY
 
 # --- Load LLM & Memory ---
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.7)
@@ -32,21 +35,16 @@ with st.spinner("📥 Loading dataset..."):
         f"{row['track_name']} by {row['track_artist']}. "
         f"Genre: {row['playlist_genre']} ({row['playlist_subgenre']}). "
         f"Valence: {row['valence']:.2f}, Energy: {row['energy']:.2f}, Danceability: {row['danceability']:.2f}.", axis=1)
-    documents = [Document(page_content=text, metadata={"index": i}) for i, text in enumerate(df["combined_text"])]
 
-# --- Embedding & Vectorstore ---
-embedding_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+# --- Genre Detection ---
+ALL_GENRES = sorted(set(df["playlist_genre"].dropna().unique()))
 
-@st.cache_resource(show_spinner=False)
-def load_vectorstore():
-    try:
-        return FAISS.load_local("faiss_index", embedding_model)
-    except:
-        vectorstore = FAISS.from_documents(documents, embedding_model)
-        vectorstore.save_local("faiss_index")
-        return vectorstore
-
-vectorstore = load_vectorstore()
+def detect_requested_genre(user_input: str, all_genres: list[str]) -> str:
+    lowered = user_input.lower()
+    for genre in all_genres:
+        if genre.lower() in lowered:
+            return genre
+    return ""
 
 # --- Tool Functions ---
 def detect_language(text: str) -> str:
@@ -62,11 +60,6 @@ def classify_mood(query: str) -> str:
 def infer_genre(query: str) -> str:
     prompt = f"Suggest a suitable music genre based on this input: {query}"
     return llm.invoke(prompt).content.strip()
-
-def retrieve_similar_songs(query: str, k=2, exclude=set()) -> list:
-    results = vectorstore.similarity_search(query, k=10)
-    filtered = [doc for doc in results if doc.page_content not in exclude]
-    return filtered[:k]
 
 def explain_recommendation(song_title: str, mood: str, lang: str, user_input: str = "") -> str:
     try:
@@ -102,7 +95,7 @@ def is_followup_input(user_input: str) -> bool:
     except:
         return False
 
-# --- Memory Init ---
+# --- Chat Memory ---
 for key in ["chat_history", "seen_songs", "last_lang", "last_input", "last_mood", "last_genre"]:
     if key not in st.session_state:
         st.session_state[key] = [] if key == "chat_history" else set() if key == "seen_songs" else ""
@@ -117,20 +110,31 @@ if user_input:
 
         is_followup = is_followup_input(user_input)
 
-        if is_followup:
+        if is_followup and st.session_state.last_mood:
             mood = st.session_state.last_mood
             genre = st.session_state.last_genre
-            semantic_input = f"User said: '{user_input}' (context: '{st.session_state.last_input}'). Mood: {mood}. Genre: {genre}. Suggest fitting songs."
         else:
             mood = classify_mood(user_input)
             genre = infer_genre(f"The user said: '{user_input}'. Mood: {mood}.")
-            semantic_input = f"User said: '{user_input}'. Interpreted mood: {mood}. Genre suggestion: {genre}. Suggest fitting songs."
             st.session_state.last_mood = mood
             st.session_state.last_genre = genre
 
-        songs = retrieve_similar_songs(semantic_input, k=2, exclude=st.session_state.seen_songs)
+        requested_genre = detect_requested_genre(user_input, ALL_GENRES)
+        df_filtered = df[df["playlist_genre"].str.contains(requested_genre, case=False, na=False)] if requested_genre else df
 
-        if not songs:
+        documents = [Document(page_content=row["combined_text"], metadata={"index": i}) for i, row in df_filtered.iterrows()]
+
+        embedding_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        vectorstore = FAISS.from_documents(documents, embedding_model)
+
+        semantic_input = f"User said: '{user_input}'. Mood: {mood}. Genre: {genre}."
+        if requested_genre:
+            semantic_input += f" User explicitly requested: {requested_genre}."
+
+        results = vectorstore.similarity_search(semantic_input, k=10)
+        filtered = [doc for doc in results if doc.page_content not in st.session_state.seen_songs][:2]
+
+        if not filtered:
             result = (
                 "😕 Belum nemu lagu yang pas. Mau coba mood atau genre lain?"
                 if lang == "id"
@@ -139,13 +143,10 @@ if user_input:
         else:
             intro = generate_intro(user_input, mood, lang)
             response_lines = [intro, ""]
-            for song in songs:
-                if song.page_content not in st.session_state.seen_songs:
-                    st.session_state.seen_songs.add(song.page_content)
-                    reason = explain_recommendation(song.page_content, mood, lang, user_input)
-                    line = f"🎵 {song.page_content} 👉 {reason}"
-                    if line not in response_lines:
-                        response_lines.append(line)
+            for song in filtered:
+                st.session_state.seen_songs.add(song.page_content)
+                reason = explain_recommendation(song.page_content, mood, lang, user_input)
+                response_lines.append(f"🎵 {song.page_content} 👉 {reason}")
             result = "\n\n".join(response_lines)
 
         st.session_state.chat_history.append(("You", user_input))
