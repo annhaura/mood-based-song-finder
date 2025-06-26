@@ -69,15 +69,25 @@ def randomize_list(text_block: str) -> str:
     shuffle(lines)
     return "\n".join(lines)
 
-def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
+def explain_recommendation(song_title: str, mood: str, lang: str, user_input: str = "") -> str:
     try:
         if lang == "id":
-            prompt = f"Jelaskan kenapa lagu '{song_title}' cocok untuk suasana hati '{mood}' dalam 1 kalimat."
+            prompt = (
+                f"Kamu adalah teman virtual yang pengertian. Seseorang sedang merasa '{mood}'. "
+                f"Dia bilang: '{user_input}'. Kamu ingin merekomendasikan lagu '{song_title}' "
+                f"dan menjelaskan dalam 1-2 kalimat kenapa lagu ini cocok untuk suasana hati itu, "
+                f"dengan gaya yang ramah dan empatik."
+            )
         else:
-            prompt = f"Explain in one sentence why the song '{song_title}' fits the mood '{mood}'."
+            prompt = (
+                f"You are a thoughtful virtual companion. Someone is feeling '{mood}'. "
+                f"They said: '{user_input}'. You want to recommend the song '{song_title}' "
+                f"and explain in 1-2 sentences why it fits that mood, in a warm and human tone."
+            )
         return llm.invoke(prompt).content.strip()
-    except Exception as e:
-        return "❗ Gagal mengambil penjelasan."
+    except Exception:
+        return "❗ Couldn't generate explanation."
+
 
 # --- Tools List ---
 tools = [
