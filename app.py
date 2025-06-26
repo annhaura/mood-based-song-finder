@@ -3,7 +3,6 @@ import pandas as pd
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.memory import ConversationBufferMemory
-from langchain.agents import initialize_agent, Tool, AgentType
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
 from langdetect import detect
@@ -75,21 +74,15 @@ def explain_recommendation(song_title: str, mood: str, lang: str) -> str:
     except:
         return "❗ Gagal mengambil penjelasan."
 
-# --- Tools & Agent ---
-tools = [
-    Tool(name="ClassifyMood", func=classify_mood, description="Classify user's mood from text"),
-    Tool(name="InferGenre", func=infer_genre, description="Suggest a genre for the given mood"),
-    Tool(name="RetrieveSongs", func=lambda q: retrieve_similar_songs(q), description="Find songs based on query"),
-    Tool(name="ExplainSong", func=lambda x: explain_recommendation(x, 'default', 'en'), description="Explain why song fits mood")
-]
-
-agent = initialize_agent(
-    tools=tools,
-    llm=llm,
-    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-    verbose=True,
-    memory=memory
-)
+def generate_intro(user_input: str, mood: str, lang: str) -> str:
+    try:
+        if lang == "id":
+            prompt = f"Buat satu paragraf singkat dan empatik sebagai respons ke seseorang yang berkata: '{user_input}'\nMood-nya adalah: '{mood}'.\nTulis dengan gaya manusiawi, seperti teman curhat."
+        else:
+            prompt = f"Write a short, empathetic paragraph responding to someone who says: '{user_input}'\nTheir mood is: '{mood}'. Write like a caring friend."
+        return llm.invoke(prompt).content.strip()
+    except:
+        return ""
 
 # --- Memory Init ---
 if "chat_history" not in st.session_state:
@@ -100,9 +93,29 @@ if "seen_songs" not in st.session_state:
 # --- Chat Input ---
 user_input = st.chat_input("What kind of music do you want to hear today?")
 if user_input:
-    with st.spinner("🤖..."):
+    with st.spinner("🤖 Thinking..."):
         lang = detect_language(user_input)
-        result = agent.run(user_input)
+        mood = classify_mood(user_input)
+        genre = infer_genre(mood)
+        semantic_input = f"{user_input}, genre: {genre}"
+
+        songs = retrieve_similar_songs(semantic_input, k=2, exclude=st.session_state.seen_songs)
+
+        if not songs:
+            result = (
+                "😕 Belum nemu lagu yang pas. Mau coba mood atau genre lain?"
+                if lang == "id"
+                else "Hmm, I can't find more songs right now. Want to try another mood or genre?"
+            )
+        else:
+            intro = generate_intro(user_input, mood, lang)
+            response_lines = [intro, ""]
+            for song in songs:
+                st.session_state.seen_songs.add(song.page_content)
+                reason = explain_recommendation(song.page_content, mood, lang)
+                line = f"🎵 {song.page_content} 👉 {reason}"
+                response_lines.append(line)
+            result = "\n\n".join(response_lines)
 
         st.session_state.chat_history.append(("You", user_input))
         st.session_state.chat_history.append(("AI", result))
