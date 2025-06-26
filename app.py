@@ -89,14 +89,21 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "seen_songs" not in st.session_state:
     st.session_state.seen_songs = set()
+if "last_lang" not in st.session_state:
+    st.session_state.last_lang = "en"
+if "last_input" not in st.session_state:
+    st.session_state.last_input = ""
 
 # --- Chat Input ---
 user_input = st.chat_input("What kind of music do you want to hear today?")
 if user_input:
     with st.spinner("🤖 Thinking..."):
         lang = detect_language(user_input)
+        if lang != st.session_state.last_lang:
+            st.session_state.last_lang = lang
+
         mood = classify_mood(user_input)
-        genre = infer_genre(user_input)
+        genre = infer_genre(f"The user said: '{user_input}'. Mood: {mood}.")
         semantic_input = f"User said: '{user_input}'. Interpreted mood: {mood}. Genre suggestion: {genre}. Suggest fitting songs."
 
         songs = retrieve_similar_songs(semantic_input, k=2, exclude=st.session_state.seen_songs)
@@ -114,11 +121,13 @@ if user_input:
                 st.session_state.seen_songs.add(song.page_content)
                 reason = explain_recommendation(song.page_content, mood, lang, user_input)
                 line = f"🎵 {song.page_content} 👉 {reason}"
-                response_lines.append(line)
+                if line not in response_lines:
+                    response_lines.append(line)
             result = "\n\n".join(response_lines)
 
         st.session_state.chat_history.append(("You", user_input))
         st.session_state.chat_history.append(("AI", result))
+        st.session_state.last_input = user_input
 
 # --- Display Chat History ---
 for speaker, text in st.session_state.chat_history:
