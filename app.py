@@ -73,21 +73,18 @@ def explain_recommendation(song_title: str, mood: str, lang: str, user_input: st
     try:
         if lang == "id":
             prompt = (
-                f"Kamu adalah teman virtual yang pengertian. Seseorang sedang merasa '{mood}'. "
-                f"Dia bilang: '{user_input}'. Kamu ingin merekomendasikan lagu '{song_title}' "
-                f"dan menjelaskan dalam 1-2 kalimat kenapa lagu ini cocok untuk suasana hati itu, "
-                f"dengan gaya yang ramah dan empatik."
+                f"Kamu adalah teman virtual yang pengertian. Seseorang sedang merasa '{mood}' dan bilang: '{user_input}'. "
+                f"Kamu ingin merekomendasikan lagu '{song_title}' dan menjelaskan dalam 1-2 kalimat kenapa lagu ini cocok, "
+                "dengan gaya yang ramah dan empatik."
             )
         else:
             prompt = (
-                f"You are a thoughtful virtual companion. Someone is feeling '{mood}'. "
-                f"They said: '{user_input}'. You want to recommend the song '{song_title}' "
-                f"and explain in 1-2 sentences why it fits that mood, in a warm and human tone."
+                f"You are a thoughtful virtual companion. Someone is feeling '{mood}' and said: '{user_input}'. "
+                f"You want to recommend the song '{song_title}' and explain in 1-2 friendly, empathetic sentences why it's a fit."
             )
         return llm.invoke(prompt).content.strip()
     except Exception:
         return "❗ Couldn't generate explanation."
-
 
 # --- Tools List ---
 tools = [
@@ -119,18 +116,33 @@ if user_input:
         genre = infer_genre(user_input)
         songs = retrieve_similar_songs(f"{user_input}, genre: {genre}", k=2)
 
+        # --- Opening empathetic greeting from LLM
+        try:
+            if lang == "id":
+                opening_prompt = (
+                    f"Kamu adalah teman virtual yang pengertian. Pengguna bilang: '{user_input}' dan suasana hatinya '{mood}'. "
+                    "Balas dengan 1-2 kalimat yang empatik, hangat, dan relevan sebelum merekomendasikan lagu."
+                )
+            else:
+                opening_prompt = (
+                    f"You are a caring virtual companion. The user said: '{user_input}' and their mood is '{mood}'. "
+                    "Respond with 1-2 warm and empathetic sentences before recommending any songs."
+                )
+            opening_text = llm.invoke(opening_prompt).content.strip()
+        except:
+            opening_text = ""
+
         if not songs:
-            response = "🤔 Maaf, aku belum bisa menemukan lagu yang cocok. Coba ganti mood atau genre?" if lang == "id" else "Sorry, I couldn't find matching songs. Want to try a different mood or genre?"
+            response = (
+                "🤔 Maaf, aku belum bisa menemukan lagu yang cocok. Coba ganti mood atau genre?" if lang == "id"
+                else "Sorry, I couldn't find matching songs. Want to try a different mood or genre?"
+            )
         else:
-            response_lines = []
+            recommendations = []
             for song in songs:
-                reason = explain_recommendation(song.page_content, mood, lang)
-                if lang == "id":
-                    line = f"🎵 {song.page_content}\n👉 {reason}"
-                else:
-                    line = f"🎵 {song.page_content}\n👉 {reason}"
-                response_lines.append(line)
-            response = "\n\n".join(response_lines)
+                reason = explain_recommendation(song.page_content, mood, lang, user_input)
+                recommendations.append(f"🎵 {song.page_content} 👉 {reason}")
+            response = f"{opening_text}\n\n" + "\n\n".join(recommendations)
 
         st.session_state.chat_history.append(("You", user_input))
         st.session_state.chat_history.append(("AI", response))
