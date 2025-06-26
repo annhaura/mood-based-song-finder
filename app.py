@@ -132,7 +132,15 @@ if user_input:
             semantic_input += f" User explicitly requested: {requested_genre}."
 
         results = vectorstore.similarity_search(semantic_input, k=10)
-        filtered = [doc for doc in results if doc.page_content not in st.session_state.seen_songs][:2]
+
+        if requested_genre:
+            filtered = [
+                doc for doc in results
+                if requested_genre.lower() in doc.page_content.lower()
+                and doc.page_content not in st.session_state.seen_songs
+            ][:2]
+        else:
+            filtered = [doc for doc in results if doc.page_content not in st.session_state.seen_songs][:2]
 
         if not filtered:
             result = (
