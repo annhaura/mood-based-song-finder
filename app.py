@@ -52,6 +52,12 @@ def load_vectorstore():
 
 vectorstore = load_vectorstore()
 
+def retrieve_songs_tool(query: str) -> str:
+    if not query or len(query.strip()) < 3:
+        return "Query too short."
+    results = vectorstore.similarity_search(query, k=3)
+    return "\n".join([f"🎵 {doc.page_content}" for doc in results])
+
 # --- Language Detection ---
 def detect_language(text: str) -> str:
     try:
@@ -115,9 +121,14 @@ user_input = st.chat_input("Apa yang ingin kamu dengar hari ini?")
 if user_input:
     with st.spinner("🤖 Agent is thinking..."):
         lang = detect_language(user_input)
-        full_prompt = f"""
-User message: {user_input}
-Detect the mood, guess genre, retrieve 3 songs, explain why they fit, and translate to {lang if lang != 'en' else 'English'} if needed.
-""".strip()
+        full_prompt = (
+    f"You are a mood-based song recommendation agent.\n"
+    f"User said: '{user_input}'\n"
+    f"- Step 1: Detect the user's mood\n"
+    f"- Step 2: Infer music genre\n"
+    f"- Step 3: Retrieve 3 songs from vectorstore\n"
+    f"- Step 4: Explain why each song fits the user's mood\n"
+    f"- Step 5: Translate output to '{lang}' if needed\n"
+)
         result = agent_executor.run(full_prompt)
         st.chat_message("AI").markdown(result)
