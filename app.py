@@ -131,8 +131,6 @@ def get_similar_song_tool(song_title: str) -> str:
     if not results:
         return "Tidak ada lagu mirip ditemukan."
     return "\n".join([f"🎶 {doc.page_content}" for doc in results[1:]])
-
-
 # --- LangChain Tools ---
 tools = [
     Tool.from_function(detect_mood_tool, name="DetectMood", description="Detect user's mood."),
@@ -142,8 +140,6 @@ tools = [
     Tool.from_function(translate_output_tool, name="TranslateOutput", description="Translate output to Bahasa Indonesia."),
     Tool.from_function(get_similar_song_tool, name="GetSimilarSongs", description="Find songs similar to a given title.")
 ]
-
-
 # --- Agent Initialization ---
 agent_executor = initialize_agent(
     tools=tools,
@@ -152,10 +148,12 @@ agent_executor = initialize_agent(
     verbose=True,
     memory=memory
 )
-
 # --- Chat Input ---
 user_input = st.chat_input("Apa yang ingin kamu dengar hari ini?")
 if user_input:
+    # Tampilkan pesan user dulu di UI chat
+    st.chat_message("user").markdown(user_input)
+
     with st.spinner("🤖 Agent is thinking..."):
         lang = detect_language(user_input)
         full_prompt = f"""
@@ -164,4 +162,5 @@ Detect the mood, guess genre, retrieve 3 songs, explain why they fit, and transl
 """.strip()
         result = agent_executor.run(full_prompt)
         st.chat_message("AI").markdown(result)
+
 
