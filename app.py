@@ -10,9 +10,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmb
 from langdetect import detect
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="🎵 Mood Song Agent", page_icon="🎧")
-st.title("Mood-Based Song Recommender")
-st.markdown("Powered by LangChain + Gemini + FAISS. Minimal 5 smart tools 🤖")
+st.set_page_config(page_title="Mood-Based Song Recommender", page_icon="🎧")
+st.title("🎧 Mood-Based Song Recommender 🎧")
+st.markdown("xxxx")
 
 # --- API Key ---
 api_key = st.secrets.get("GOOGLE_API_KEY") or st.text_input("🔑 Masukkan Google API Key kamu:", type="password")
