@@ -130,5 +130,5 @@ if user_input:
     f"- Step 4: Explain why each song fits the user's mood\n"
     f"- Step 5: Translate output to '{lang}' if needed\n"
 )
-        result = agent_executor.run(full_prompt)
+        result = agent_executor.run({"input": user_input})
         st.chat_message("AI").markdown(result)
