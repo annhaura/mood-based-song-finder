@@ -70,47 +70,79 @@ def detect_language(text: str) -> str:
     except:
         return "en"
 
-# --- Tool Definitions ---
+# --- TOOL: Detect Mood ---
 def detect_mood_tool(user_input: str) -> str:
-    prompt = f"Describe the user's emotional mood in 1–3 words based on this input:\n\n{user_input}"
+    if not user_input.strip():
+        return "Mood tidak terdeteksi. Coba masukkan perasaanmu."
+    prompt = f"Describe the user's emotional mood in 1–3 words:\n\n{user_input}"
     return llm.invoke(prompt).content.strip()
 
+
+# --- TOOL: Infer Genre ---
 def infer_genre_tool(user_input: str) -> str:
-    prompt = f"Suggest a suitable music genre for this input: {user_input}"
+    if not user_input.strip():
+        return "Pop"  # fallback genre
+    prompt = f"Suggest a suitable music genre for: {user_input}"
     return llm.invoke(prompt).content.strip()
 
+
+# --- TOOL: Retrieve Songs from Vectorstore ---
 def retrieve_songs_tool(query: str) -> str:
+    if not query.strip():
+        return "Tidak ada input lagu yang valid."
     results = vectorstore.similarity_search(query, k=3)
+    if not results:
+        return "Tidak ditemukan lagu yang cocok."
     return "\n".join([f"🎵 {doc.page_content}" for doc in results])
 
+
+# --- TOOL: Explain Why the Song Fits ---
 def explain_choice_tool(song_and_mood: str) -> str:
-    # Expected input: "song_title | mood | original_input"
-    try:
-        title, mood, user_input = song_and_mood.split("|")
-    except:
-        return "Invalid input format."
-    lang = detect_language(user_input)
-    if lang == "id":
-        prompt = f"Jelaskan kenapa lagu '{title}' cocok untuk mood '{mood}', berdasarkan: '{user_input}'. Singkat saja ya."
-    else:
-        prompt = f"Why does the song '{title}' fit mood '{mood}' from input: '{user_input}'? Short and to the point."
+    parts = song_and_mood.split("|")
+    if len(parts) != 3:
+        return "Input tidak valid. Format: judul | mood | input user"
+    title, mood, user_input = parts
+    lang = detect(user_input)
+    prompt = (
+        f"Jelaskan kenapa lagu '{title}' cocok untuk mood '{mood}' berdasarkan input '{user_input}'. Singkat ya."
+        if lang == "id"
+        else f"Why does the song '{title}' fit the mood '{mood}' from input '{user_input}'? Keep it short."
+    )
     return llm.invoke(prompt).content.strip()
 
-def translate_output_tool(text_and_lang: str) -> str:
-    text, lang = text_and_lang.rsplit("|", 1)
-    if lang == "id":
-        prompt = f"Terjemahkan ini ke Bahasa Indonesia secara alami dan singkat:\n\n{text}"
+
+# --- TOOL: Translate to Bahasa Indonesia if needed ---
+def translate_output_tool(text: str) -> str:
+    try:
+        lang = detect(text)
+        if lang == "id":
+            return text
+        prompt = f"Terjemahkan ini ke Bahasa Indonesia secara alami:\n\n{text}"
         return llm.invoke(prompt).content.strip()
-    return text  # return original if already English
+    except:
+        return text
+
+
+# --- TOOL: Get Similar Songs based on a reference song ---
+def get_similar_song_tool(song_title: str) -> str:
+    if not song_title.strip():
+        return "Masukkan judul lagu untuk mencari yang mirip."
+    results = vectorstore.similarity_search(song_title, k=4)
+    if not results:
+        return "Tidak ada lagu mirip ditemukan."
+    return "\n".join([f"🎶 {doc.page_content}" for doc in results[1:]])
+
 
 # --- LangChain Tools ---
 tools = [
-    Tool.from_function(func=detect_mood_tool, name="DetectMood", description="Detect user's mood from their input."),
-    Tool.from_function(func=infer_genre_tool, name="InferGenre", description="Suggest music genre based on user input."),
-    Tool.from_function(func=retrieve_songs_tool, name="RetrieveSongs", description="Retrieve matching songs from the vectorstore."),
-    Tool.from_function(func=explain_choice_tool, name="ExplainChoice", description="Explain why a song fits user's mood."),
-    Tool.from_function(func=translate_output_tool, name="TranslateOutput", description="Translate output to user's language."),
+    Tool.from_function(detect_mood_tool, name="DetectMood", description="Detect user's mood."),
+    Tool.from_function(infer_genre_tool, name="InferGenre", description="Suggest music genre."),
+    Tool.from_function(retrieve_songs_tool, name="RetrieveSongs", description="Find songs matching mood/genre."),
+    Tool.from_function(explain_choice_tool, name="ExplainChoice", description="Explain why a song fits the mood."),
+    Tool.from_function(translate_output_tool, name="TranslateOutput", description="Translate output to Bahasa Indonesia."),
+    Tool.from_function(get_similar_song_tool, name="GetSimilarSongs", description="Find songs similar to a given title.")
 ]
+
 
 # --- Agent Initialization ---
 agent_executor = initialize_agent(
