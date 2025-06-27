@@ -119,16 +119,9 @@ agent_executor = initialize_agent(
 # --- Chat Input ---
 user_input = st.chat_input("Apa yang ingin kamu dengar hari ini?")
 if user_input:
+    st.chat_message("user").markdown(user_input)
+
     with st.spinner("🤖 Agent is thinking..."):
         lang = detect_language(user_input)
-        full_prompt = (
-    f"You are a mood-based song recommendation agent.\n"
-    f"User said: '{user_input}'\n"
-    f"- Step 1: Detect the user's mood\n"
-    f"- Step 2: Infer music genre\n"
-    f"- Step 3: Retrieve 3 songs from vectorstore\n"
-    f"- Step 4: Explain why each song fits the user's mood\n"
-    f"- Step 5: Translate output to '{lang}' if needed\n"
-)
-        result = agent_executor.run({"input": user_input})
+        result = agent_executor.run({"input": user_input})  
         st.chat_message("AI").markdown(result)
