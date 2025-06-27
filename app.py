@@ -130,29 +130,24 @@ agent_executor = initialize_agent(
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# --- Chat Input ---
+# --- Chat Input Logic ---
 user_input = st.chat_input("Apa yang ingin kamu dengar hari ini?")
+
 if user_input:
+    # Tampilkan input user
     st.chat_message("user").markdown(user_input)
     st.session_state.chat_history.append(("user", user_input))
 
-    lang = detect_language(user_input)
-    full_prompt = (
-        f"You are a smart mood-based song recommender.\n"
-        f"User said: '{user_input}'\n"
-        f"Steps to follow:\n"
-        f"1. Detect user's mood\n"
-        f"2. Suggest music genre\n"
-        f"3. Ask how many songs\n"
-        f"4. Retrieve that many songs from vectorstore\n"
-        f"5. Explain why each song fits\n"
-        f"6. Detect if user wants to switch genre\n"
-        f"7. Translate final output to '{lang}' if needed"
-    )
-    with st.spinner("Thinking..."):
-        result = agent_executor.run({"input": full_prompt, "chat_history": memory.chat_memory.messages})
-        st.chat_message("AI").markdown(result)
-        st.session_state.chat_history.append(("AI", result))
+    with st.spinner("🤖 Agent is thinking..."):
+        try:
+            # Jalankan agent (tanpa custom prompt, memory otomatis masuk)
+            result = agent_executor.run({"input": user_input})
+
+            # Tampilkan dan simpan respons agent
+            st.chat_message("AI").markdown(result)
+            st.session_state.chat_history.append(("AI", result))
+        except Exception as e:
+            st.error(f"Terjadi error saat memproses input: {str(e)}")
 
 # --- Display Chat History ---
 for speaker, msg in st.session_state.chat_history:
