@@ -151,16 +151,9 @@ agent_executor = initialize_agent(
 # --- Chat Input ---
 user_input = st.chat_input("Apa yang ingin kamu dengar hari ini?")
 if user_input:
-    # Tampilkan pesan user dulu di UI chat
+    # Tampilkan pesan user di UI chat
     st.chat_message("user").markdown(user_input)
 
     with st.spinner("🤖 Agent is thinking..."):
-        lang = detect_language(user_input)
-        full_prompt = f"""
-User message: {user_input}
-Detect the mood, guess genre, retrieve 3 songs, explain why they fit, and translate to {lang if lang != 'en' else 'English'} if needed.
-""".strip()
-        result = agent_executor.run(full_prompt)
+        result = agent_executor.invoke({"input": user_input})
         st.chat_message("AI").markdown(result)
-
-
