@@ -13,7 +13,7 @@ from langdetect import detect, DetectorFactory
 DetectorFactory.seed = 42
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="\ud83c\udfb5 Mood Song Agent", page_icon="\ud83c\udfa7")
+st.set_page_config(page_title="Mood Song Agent", page_icon="🎶")
 st.title("Mood-Based Song Recommender")
 st.markdown("Powered by LangChain + Gemini + FAISS. With follow-up questions and dynamic genre support.")
 
