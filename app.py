@@ -11,7 +11,7 @@ from langdetect import detect
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Mood-Based Song Recommender", page_icon="🎧")
-st.title("🎧 Mood-Based Song Recommender 🎧")
+st.title("🎧 Mood-Based Song Recommender")
 st.markdown("xxxx")
 
 # --- API Key ---
