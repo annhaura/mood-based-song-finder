@@ -43,13 +43,22 @@ def load_and_sample_dataset(csv_url, max_per_subgenre=80):
 df = load_and_sample_dataset(csv_url)
 documents = [Document(page_content=row["combined_text"], metadata={"index": i}) for i, row in df.iterrows()]
 
+
 @st.cache_resource
 def load_vectorstore():
-    if os.path.exists("faiss_index"):
-        return FAISS.load_local("faiss_index", embedding_model)
-    else:
+    try:
+        # Coba load dari local
+        if os.path.exists("faiss_index") and os.path.exists("faiss_index/index.faiss"):
+            return FAISS.load_local("faiss_index", embedding_model)
+        else:
+            raise FileNotFoundError
+    except:
+        # Kalau gagal (karena file nggak ada atau corrupt), bangun ulang
         vectorstore = FAISS.from_documents(documents, embedding_model)
-        vectorstore.save_local("faiss_index")
+        try:
+            vectorstore.save_local("faiss_index")  # Hanya berhasil kalau running lokal
+        except:
+            pass  # Ignore error kalau di Streamlit Cloud
         return vectorstore
 
 vectorstore = load_vectorstore()
