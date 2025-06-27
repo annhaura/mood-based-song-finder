@@ -46,12 +46,13 @@ documents = [Document(page_content=row["combined_text"], metadata={"index": i}) 
 
 @st.cache_resource
 def load_vectorstore():
-    if os.path.exists("faiss_index"):
+    try:
         return FAISS.load_local("faiss_index", embedding_model)
-    else:
+    except:
         vectorstore = FAISS.from_documents(documents, embedding_model)
         vectorstore.save_local("faiss_index")
         return vectorstore
+
 
 vectorstore = load_vectorstore()
 
