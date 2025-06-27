@@ -18,7 +18,7 @@ st.title("Mood-Based Song Recommender")
 st.markdown("Powered by LangChain + Gemini + FAISS. With follow-up questions and dynamic genre support.")
 
 # --- API Key ---
-api_key = st.secrets.get("GOOGLE_API_KEY") or st.text_input("\ud83d\udd11 Masukkan Google API Key kamu:", type="password")
+api_key = st.secrets.get("GOOGLE_API_KEY") or st.text_input("Masukkan Google API Key kamu:", type="password")
 if not api_key:
     st.stop()
 os.environ["GOOGLE_API_KEY"] = api_key
@@ -148,7 +148,7 @@ if user_input:
         f"6. Detect if user wants to switch genre\n"
         f"7. Translate final output to '{lang}' if needed"
     )
-    with st.spinner("\ud83e\udd16 Agent is thinking..."):
+    with st.spinner("Thinking..."):
         result = agent_executor.run({"input": full_prompt, "chat_history": memory.chat_memory.messages})
         st.chat_message("AI").markdown(result)
         st.session_state.chat_history.append(("AI", result))
