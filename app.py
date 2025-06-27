@@ -1,3 +1,4 @@
+# mood_based_agent.py
 import streamlit as st
 import os
 import pandas as pd
@@ -7,12 +8,14 @@ from langchain.memory import ConversationBufferMemory
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langdetect import detect
+from langdetect import detect, DetectorFactory
+
+DetectorFactory.seed = 42  # stabilkan language detect
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="Mood-Based Song Recommender", page_icon="🎧")
+st.set_page_config(page_title="🎵 Mood Song Agent", page_icon="🎧")
 st.title("Mood-Based Song Recommender")
-st.markdown("xxxx")
+st.markdown("Powered by LangChain + Gemini + FAISS. With follow-up questions and dynamic genre support.")
 
 # --- API Key ---
 api_key = st.secrets.get("GOOGLE_API_KEY") or st.text_input("🔑 Masukkan Google API Key kamu:", type="password")
@@ -52,20 +55,14 @@ def load_vectorstore():
 
 vectorstore = load_vectorstore()
 
-def retrieve_songs_tool(query: str) -> str:
-    if not query or len(query.strip()) < 3:
-        return "Query too short."
-    results = vectorstore.similarity_search(query, k=3)
-    return "\n".join([f"🎵 {doc.page_content}" for doc in results])
-
-# --- Language Detection ---
+# --- Tools ---
 def detect_language(text: str) -> str:
     try:
-        return detect(text)
+        lang = detect(text)
+        return lang if lang in ["en", "id"] else "id"
     except:
-        return "en"
+        return "id"
 
-# --- Tool Definitions ---
 def detect_mood_tool(user_input: str) -> str:
     prompt = f"Describe the user's emotional mood in 1–3 words based on this input:\n\n{user_input}"
     return llm.invoke(prompt).content.strip()
@@ -75,11 +72,17 @@ def infer_genre_tool(user_input: str) -> str:
     return llm.invoke(prompt).content.strip()
 
 def retrieve_songs_tool(query: str) -> str:
-    results = vectorstore.similarity_search(query, k=3)
+    count = 3
+    if "|" in query:
+        query, count_str = query.rsplit("|", 1)
+        try:
+            count = int(count_str.strip())
+        except:
+            count = 3
+    results = vectorstore.similarity_search(query, k=count)
     return "\n".join([f"🎵 {doc.page_content}" for doc in results])
 
 def explain_choice_tool(song_and_mood: str) -> str:
-    # Expected input: "song_title | mood | original_input"
     try:
         title, mood, user_input = song_and_mood.split("|")
     except:
@@ -96,15 +99,25 @@ def translate_output_tool(text_and_lang: str) -> str:
     if lang == "id":
         prompt = f"Terjemahkan ini ke Bahasa Indonesia secara alami dan singkat:\n\n{text}"
         return llm.invoke(prompt).content.strip()
-    return text  # return original if already English
+    return text
+
+def ask_song_count_tool(user_input: str) -> str:
+    prompt = f"From the following input, how many songs does the user want (return only a number)? If unclear, return 3.\n\n{user_input}"
+    return llm.invoke(prompt).content.strip()
+
+def genre_switch_detector_tool(user_input: str) -> str:
+    prompt = f"Is the user asking to change the genre or mood of music in this message? Reply only 'yes' or 'no'.\n\n{user_input}"
+    return llm.invoke(prompt).content.strip().lower()
 
 # --- LangChain Tools ---
 tools = [
     Tool.from_function(func=detect_mood_tool, name="DetectMood", description="Detect user's mood from their input."),
     Tool.from_function(func=infer_genre_tool, name="InferGenre", description="Suggest music genre based on user input."),
-    Tool.from_function(func=retrieve_songs_tool, name="RetrieveSongs", description="Retrieve matching songs from the vectorstore."),
+    Tool.from_function(func=retrieve_songs_tool, name="RetrieveSongs", description="Retrieve matching songs. Input format: 'query | number'"),
     Tool.from_function(func=explain_choice_tool, name="ExplainChoice", description="Explain why a song fits user's mood."),
     Tool.from_function(func=translate_output_tool, name="TranslateOutput", description="Translate output to user's language."),
+    Tool.from_function(func=ask_song_count_tool, name="CountRequestedSongs", description="Detect how many songs user wants."),
+    Tool.from_function(func=genre_switch_detector_tool, name="DetectGenreChange", description="Detect if user wants to switch genre or mood."),
 ]
 
 # --- Agent Initialization ---
@@ -116,12 +129,22 @@ agent_executor = initialize_agent(
     memory=memory
 )
 
-# --- Chat Input ---
+# --- Chat History State ---
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# --- Chat Input Logic ---
 user_input = st.chat_input("Apa yang ingin kamu dengar hari ini?")
 if user_input:
     st.chat_message("user").markdown(user_input)
+    st.session_state.chat_history.append(("user", user_input))
 
     with st.spinner("🤖 Agent is thinking..."):
-        lang = detect_language(user_input)
-        result = agent_executor.run({"input": user_input})  
+        result = agent_executor.run({"input": user_input})
         st.chat_message("AI").markdown(result)
+        st.session_state.chat_history.append(("AI", result))
+
+# --- Display Chat History ---
+for speaker, msg in st.session_state.chat_history:
+    with st.chat_message(speaker):
+        st.markdown(msg)
